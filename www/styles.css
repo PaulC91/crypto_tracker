@@ -1,0 +1,14 @@
+@import url("https://fonts.googleapis.com/css?family=Lato:400,700,400italic");
+
+.navbar-logo {
+padding-top: 4px;
+}
+
+body {
+  font-family:"Lato","Helvetica Neue",Helvetica,Arial,sans-serif;
+}
+
+p {
+  
+  font-size: .9em;
+}

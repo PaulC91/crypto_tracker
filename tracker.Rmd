@@ -1,0 +1,150 @@
+---
+title: "crypto tracker"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    css: www/styles.css
+    logo: www/favicon.ico
+    favicon: www/favicon.ico
+    social: [ "twitter", "linkedin", "menu"]
+runtime: shiny
+---
+
+```{r global, include=FALSE}
+library(flexdashboard)
+library(crypto)
+library(tidyverse)
+library(quantmod)
+library(dygraphs)
+
+getFX("USD/GBP", from = (Sys.Date() -1))
+rate <- as.numeric(USDGBP$USD.GBP[1])
+
+eth_raw <- getCoins(c("BTC", "ETH")) %>% 
+  select(name, date, price_usd = close)
+
+```
+
+Inputs {.sidebar}
+-----------------------------------------------------------------------
+Welcome to the [Culture of Insight's](https://cultureofinsight.com/) crypto tracking tool.
+
+The tracker updates daily with USD closing prices. GBP prices are calculated using today's USD/GBP exchange rate: **`r rate`**
+
+For personalised metrics, enter the amount of the selected coin you own and when you acquired it below:
+
+---
+
+```{r}
+selectInput("coin", "What Crypto?", c("Bitcoin", "Ethereum"))
+
+numericInput("n", "How many coins?", 1, min = 0, max = 100, step = 0.01)
+
+dateInput("date", "Date Purchased:", value = "2018-01-01", min = NULL, max = Sys.Date(),
+  format = "d MM yyyy", startview = "month", weekstart = 0,
+  language = "en", width = NULL)
+
+radioButtons('currency', 'Currency', c('GBP', 'USD'), inline = FALSE)
+```
+
+---
+
+Use the range slider at the bottom of the chart to see historical prices.
+
+This dashboard was built using:
+
+- [R](https://www.r-project.org/)
+- [shiny](http://rmarkdown.rstudio.com/flexdashboard/shiny.html)
+- [dygraphs](https://rstudio.github.io/dygraphs/)
+- [crypto package](https://github.com/JesseVent/crypto/)
+
+Contact [paul@cultureofinsight.com](mailto:paul@cultureofinsight.com) with any enquires.
+
+Row
+-----------------------------------------------------------------------
+
+### Current Value
+
+```{r}
+valueBoxOutput("value")
+```
+
+### ROI
+
+```{r}
+valueBoxOutput("roi")
+```
+
+### ROI %
+
+```{r}
+valueBoxOutput("roi_pct")
+```
+
+Row 
+-----------------------------------------------------------------------
+
+###
+
+```{r}
+dygraphOutput("chart")
+```
+
+```{r, server}
+
+  eth <- reactive({
+    eth_raw %>% 
+      filter(name == input$coin) %>% 
+      select(-name) %>% 
+      mutate(USD = input$n * price_usd, 
+             GBP = input$n * (price_usd * rate))
+  })
+  
+  stock <- reactive({
+    eth() %>% 
+      filter(date >= input$date) %>% 
+      mutate(daily_pct = (price_usd - lag(price_usd)) / lag(price_usd)) %>% 
+      mutate(total_pct = (price_usd - price_usd[1]) / price_usd[1])
+  })
+  
+  column_select <- reactive({
+    switch(input$currency,
+           GBP = 4,
+           USD = 3)
+  })
+  
+  output$value <- renderValueBox({
+    value <- dplyr::last(stock()[, column_select()])
+    render_value <- paste0(ifelse(column_select() == 4, "£", "$"), round(value, digits = 0))
+    valueBox(render_value, "Current Value", icon = ifelse(column_select() == 4, "fa-gbp", "fa-usd"), color = "SteelBlue")
+  })
+  
+  output$roi <- renderValueBox({
+    gainz <- dplyr::last(stock()[, column_select()]) - dplyr::first(stock()[, column_select()])
+    render_value <- paste0(ifelse(column_select() == 4, "£", "$"), round(gainz, digits = 0))
+    valueBox(render_value, "ROI", icon = "fa-line-chart", color = "DarkCyan")
+  })
+  
+  output$roi_pct <-renderValueBox({
+    pct <- dplyr::last(stock()$total_pct)
+    render_value <- paste0(round(pct, digits = 3) * 100, "%")
+    valueBox(render_value, "ROI %", icon = "fa-percent", color = "LightCoral")
+  })
+  
+  output$chart <- renderDygraph({
+    
+    eth_ts <- xts(eth()[,column_select()], eth()$date)
+      
+    dygraph(eth_ts, main = paste(input$n, input$coin, input$currency, "Value")) %>% 
+      dySeries("V1", label = input$currency) %>%
+      dyEvent(input$date, "Date of Purchase", labelLoc = "bottom") %>% 
+      dyRangeSelector(dateWindow = c(as.character(input$date - 7), as.character(Sys.Date()))) %>% 
+      dyLimit(as.numeric(eth_ts[as.character(input$date)]), color = "red") %>% 
+      #dyAxis("x", drawGrid = FALSE) %>%
+      #dyAxis("y", label = "£") %>%
+      dyOptions(fillGraph = TRUE, gridLineWidth = .1)
+    
+  })
+
+```
+
