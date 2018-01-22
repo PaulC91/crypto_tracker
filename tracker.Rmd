@@ -13,6 +13,8 @@ runtime: shiny
 ```{r global, include=FALSE}
 library(flexdashboard)
 library(crypto)
+library(snow)
+library(doSNOW)
 library(tidyverse)
 library(quantmod)
 library(dygraphs)
