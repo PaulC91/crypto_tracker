@@ -22,7 +22,7 @@ library(dygraphs)
 getFX("USD/GBP", from = (Sys.Date() -1))
 rate <- as.numeric(USDGBP$USD.GBP[1])
 
-eth_raw <- getCoins(c("BTC", "ETH")) %>% 
+coinz_raw <- getCoins(c("BTC", "ETH")) %>% 
   select(name, date, price_usd = close)
 
 ```
@@ -94,8 +94,8 @@ dygraphOutput("chart")
 
 ```{r, server}
 
-  eth <- reactive({
-    eth_raw %>% 
+  coinz <- reactive({
+    coinz_raw %>% 
       filter(name == input$coin) %>% 
       select(-name) %>% 
       mutate(USD = input$n * price_usd, 
@@ -103,7 +103,7 @@ dygraphOutput("chart")
   })
   
   stock <- reactive({
-    eth() %>% 
+    coinz() %>% 
       filter(date >= input$date) %>% 
       mutate(daily_pct = (price_usd - lag(price_usd)) / lag(price_usd)) %>% 
       mutate(total_pct = (price_usd - price_usd[1]) / price_usd[1])
@@ -135,15 +135,13 @@ dygraphOutput("chart")
   
   output$chart <- renderDygraph({
     
-    eth_ts <- xts(eth()[,column_select()], eth()$date)
+    coinz_ts <- xts(coinz()[,column_select()], coinz()$date)
       
-    dygraph(eth_ts, main = paste(input$n, input$coin, input$currency, "Value")) %>% 
+    dygraph(coinz_ts, main = paste(input$n, input$coin, input$currency, "Value")) %>% 
       dySeries("V1", label = input$currency) %>%
       dyEvent(input$date, "Date of Purchase", labelLoc = "bottom") %>% 
       dyRangeSelector(dateWindow = c(as.character(input$date - 7), as.character(Sys.Date()))) %>% 
-      dyLimit(as.numeric(eth_ts[as.character(input$date)]), color = "red") %>% 
-      #dyAxis("x", drawGrid = FALSE) %>%
-      #dyAxis("y", label = "£") %>%
+      dyLimit(as.numeric(coinz_ts[as.character(input$date)]), color = "red") %>% 
       dyOptions(fillGraph = TRUE, gridLineWidth = .1)
     
   })
