@@ -7,23 +7,40 @@ output:
     logo: www/favicon.ico
     favicon: www/favicon.ico
     social: [ "twitter", "linkedin", "menu"]
+    source_code: embed
 runtime: shiny
 ---
 
 ```{r global, include=FALSE}
 library(flexdashboard)
-library(crypto)
-library(snow)
-library(doSNOW)
+library(googlesheets)
+library(RCrypto)
 library(tidyverse)
-library(quantmod)
 library(dygraphs)
+library(xts)
 
-getFX("USD/GBP", from = (Sys.Date() -1))
-rate <- as.numeric(USDGBP$USD.GBP[1])
+# to setup googlesheet auth (comment out once done) -----------------------------------
+#shiny_token <- gs_auth() # authenticate w/ your desired Google identity here
+#saveRDS(shiny_token, "shiny_app_token.rds")
 
-coinz_raw <- getCoins(c("BTC", "ETH")) %>% 
-  select(name, date, price_usd = close)
+new_prices <- RCrypto::CoinMarketCap_Ticker("GBP", c("BTC", "ETH")) %>% 
+  mutate(last_updated = as.POSIXct(as.numeric(last_updated), origin = "1970-01-01")) %>%
+  mutate_at(vars(contains("price")), as.numeric) %>% 
+  select(name, date = last_updated, price_usd, price_gbp)
+
+googlesheets::gs_auth(token = "shiny_app_token.rds")
+sheet_key <- "1T77AEDJxLtb7_sr4nrfyYR9Xkj6w0mMDFKhsMSK-Ykc"
+
+gs_key(sheet_key) %>%
+  gs_add_row(input = new_prices)
+
+coinz_raw <- googlesheets::gs_key(sheet_key) %>%
+  gs_read_csv() %>%
+  bind_rows(new_prices) %>% 
+  arrange(name, date) %>% 
+  distinct()
+
+rm(new_prices)
 
 ```
 
@@ -31,7 +48,7 @@ Inputs {.sidebar}
 -----------------------------------------------------------------------
 Welcome to the [Culture of Insight's](https://cultureofinsight.com/) crypto tracking tool.
 
-The tracker updates daily with USD closing prices. GBP prices are calculated using today's USD/GBP exchange rate: **`r rate`**
+The tracker fetches real-time prices from the [coinmarketcap API](https://coinmarketcap.com/api/) every time it is launched then writes them to a googlesheets database.
 
 For personalised metrics, enter the amount of the selected coin you own and when you acquired it below:
 
@@ -42,11 +59,11 @@ selectInput("coin", "What Crypto?", c("Bitcoin", "Ethereum"))
 
 numericInput("n", "How many coins?", 1, min = 0, max = 100, step = 0.01)
 
-dateInput("date", "Date Purchased:", value = "2018-01-01", min = NULL, max = Sys.Date(),
+dateInput("date", "Date Purchased:", value = "2018-01-01 00:00:00", min = NULL, max = Sys.time(),
   format = "d MM yyyy", startview = "month", weekstart = 0,
   language = "en", width = NULL)
 
-radioButtons('currency', 'Currency', c('GBP', 'USD'), inline = FALSE)
+radioButtons('currency', 'Currency', c('GBP', 'USD'), inline = TRUE)
 ```
 
 ---
@@ -57,8 +74,9 @@ This dashboard was built using:
 
 - [R](https://www.r-project.org/)
 - [shiny](http://rmarkdown.rstudio.com/flexdashboard/shiny.html)
+- [googlesheets](https://github.com/jennybc/googlesheets)
+- [RCrypto](https://cran.r-project.org/web/packages/RCrypto/index.html)
 - [dygraphs](https://rstudio.github.io/dygraphs/)
-- [crypto package](https://github.com/JesseVent/crypto/)
 
 Contact [paul@cultureofinsight.com](mailto:paul@cultureofinsight.com) with any enquires.
 
@@ -99,7 +117,7 @@ dygraphOutput("chart")
       filter(name == input$coin) %>% 
       select(-name) %>% 
       mutate(USD = input$n * price_usd, 
-             GBP = input$n * (price_usd * rate))
+             GBP = input$n * price_gbp)
   })
   
   stock <- reactive({
@@ -111,19 +129,21 @@ dygraphOutput("chart")
   
   column_select <- reactive({
     switch(input$currency,
-           GBP = 4,
-           USD = 3)
+           GBP = 5,
+           USD = 4)
   })
   
   output$value <- renderValueBox({
-    value <- dplyr::last(stock()[, column_select()])
-    render_value <- paste0(ifelse(column_select() == 4, "£", "$"), round(value, digits = 0))
-    valueBox(render_value, "Current Value", icon = ifelse(column_select() == 4, "fa-gbp", "fa-usd"), color = "SteelBlue")
+    value <- dplyr::last(stock()[[column_select()]])
+    render_value <- paste0(ifelse(column_select() == 5, "£", "$"), round(value, digits = 0))
+    valueBox(render_value, 
+             paste("Current Value Last Updated @ ", format(max(stock()$date), format = "%H:%M")), 
+             icon = ifelse(column_select() == 5, "fa-gbp", "fa-usd"), color = "SteelBlue")
   })
   
   output$roi <- renderValueBox({
-    gainz <- dplyr::last(stock()[, column_select()]) - dplyr::first(stock()[, column_select()])
-    render_value <- paste0(ifelse(column_select() == 4, "£", "$"), round(gainz, digits = 0))
+    gainz <- dplyr::last(stock()[[column_select()]]) - dplyr::first(stock()[[column_select()]])
+    render_value <- paste0(ifelse(column_select() == 5, "£", "$"), round(gainz, digits = 0))
     valueBox(render_value, "ROI", icon = "fa-line-chart", color = "DarkCyan")
   })
   
@@ -138,9 +158,9 @@ dygraphOutput("chart")
     coinz_ts <- xts(coinz()[,column_select()], coinz()$date)
       
     dygraph(coinz_ts, main = paste(input$n, input$coin, input$currency, "Value")) %>% 
-      dySeries("V1", label = input$currency) %>%
+      #dySeries("V1", label = input$currency) %>%
       dyEvent(input$date, "Date of Purchase", labelLoc = "bottom") %>% 
-      dyRangeSelector(dateWindow = c(as.character(input$date - 7), as.character(Sys.Date()))) %>% 
+      dyRangeSelector(dateWindow = c(as.character(input$date - 7), as.character(Sys.time()))) %>% 
       dyLimit(as.numeric(coinz_ts[as.character(input$date)]), color = "red") %>% 
       dyOptions(fillGraph = TRUE, gridLineWidth = .1)
     
