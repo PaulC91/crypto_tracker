@@ -4,10 +4,10 @@ shiny app to get personalised metrics on cryptocurrency investments
 
 ### Features
 
-- Fetches real-time coin prices from the coinmarketcap API via the [RCrypto pacage](https://cran.r-project.org/web/packages/RCrypto/index.html)
-- Uses googlesheets for persistent data storage
-- Dygraph for interactive time-series charting
+- Real-time coin prices from the coinmarketcap API via the [RCrypto package](https://cran.r-project.org/web/packages/RCrypto/index.html)
+- Googlesheets for persistent data storage
+- Dygraphs for interactive time-series charting
 
-[cultureofinsight.shinyapps.io/crypto_tracker/](https://cultureofinsight.shinyapps.io/crypto_tracker/)
+[App hosted here](https://cultureofinsight.shinyapps.io/crypto_tracker/)
 
 ![](screengrab.png)
