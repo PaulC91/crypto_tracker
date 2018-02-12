@@ -4,7 +4,7 @@ shiny app to get personalised metrics on cryptocurrency investments
 
 ### Features
 
-- Real-time coin prices from the coinmarketcap API via the [RCrypto package](https://cran.r-project.org/web/packages/RCrypto/index.html)
+- Real-time hourly coin prices from the coinmarketcap API via the [RCrypto package](https://cran.r-project.org/web/packages/RCrypto/index.html) scraped with a scheduled Rscript on a cloud server
 - Googlesheets for persistent data storage
 - Dygraphs for interactive time-series charting
 

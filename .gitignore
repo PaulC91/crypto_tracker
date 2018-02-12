@@ -6,3 +6,4 @@ crypto_tracker.Rproj
 rsconnect/
 .httr-oauth
 shiny_app_token.rds
+old_code.R

@@ -7,14 +7,13 @@ output:
     logo: www/favicon.ico
     favicon: www/favicon.ico
     social: [ "twitter", "linkedin", "menu"]
-    source_code: embed
+    source_code: "https://github.com/PaulC91/crypto_tracker"
 runtime: shiny
 ---
 
 ```{r global, include=FALSE}
 library(flexdashboard)
 library(googlesheets)
-library(RCrypto)
 library(tidyverse)
 library(dygraphs)
 library(xts)
@@ -23,24 +22,12 @@ library(xts)
 #shiny_token <- gs_auth() # authenticate w/ your desired Google identity here
 #saveRDS(shiny_token, "shiny_app_token.rds")
 
-new_prices <- RCrypto::CoinMarketCap_Ticker("GBP", c("BTC", "ETH")) %>% 
-  mutate(last_updated = as.POSIXct(as.numeric(last_updated), origin = "1970-01-01")) %>%
-  mutate_at(vars(contains("price")), as.numeric) %>% 
-  select(name, date = last_updated, price_usd, price_gbp)
-
 googlesheets::gs_auth(token = "shiny_app_token.rds")
 sheet_key <- "1T77AEDJxLtb7_sr4nrfyYR9Xkj6w0mMDFKhsMSK-Ykc"
 
-gs_key(sheet_key) %>%
-  gs_add_row(input = new_prices)
-
 coinz_raw <- googlesheets::gs_key(sheet_key) %>%
-  gs_read_csv() %>%
-  bind_rows(new_prices) %>% 
-  arrange(name, date) %>% 
+  gs_read_csv(ws = "CoinDB") %>%
   distinct()
-
-rm(new_prices)
 
 ```
 
@@ -48,7 +35,7 @@ Inputs {.sidebar}
 -----------------------------------------------------------------------
 Welcome to the [Culture of Insight's](https://cultureofinsight.com/) crypto tracking tool.
 
-The tracker fetches real-time prices from the [coinmarketcap API](https://coinmarketcap.com/api/) every time it is launched then writes them to a googlesheets database.
+The tracker fetches real-time prices from the [coinmarketcap API](https://coinmarketcap.com/api/) every hour using a cron job Rscript on a cloud server then writes them to a googlesheets database which is then read into this app.
 
 For personalised metrics, enter the amount of the selected coin you own and when you acquired it below:
 
@@ -74,8 +61,9 @@ This dashboard was built using:
 
 - [R](https://www.r-project.org/)
 - [shiny](http://rmarkdown.rstudio.com/flexdashboard/shiny.html)
-- [googlesheets](https://github.com/jennybc/googlesheets)
 - [RCrypto](https://cran.r-project.org/web/packages/RCrypto/index.html)
+- [googlesheets](https://github.com/jennybc/googlesheets)
+- [cron](https://en.wikipedia.org/wiki/Cron)
 - [dygraphs](https://rstudio.github.io/dygraphs/)
 
 Contact [paul@cultureofinsight.com](mailto:paul@cultureofinsight.com) with any enquires.
@@ -159,6 +147,8 @@ dygraphOutput("chart")
       
     dygraph(coinz_ts, main = paste(input$n, input$coin, input$currency, "Value")) %>% 
       #dySeries("V1", label = input$currency) %>%
+      dyAxis("x", valueFormatter = 'function(ms) {return new Date(ms).toLocaleString();}') %>%
+      dyAxis("y", axisLabelFormatter = 'function(d){return d.toString().replace(/\\B(?=(\\d{3})+(?!\\d))/g, ",");}') %>%
       dyEvent(input$date, "Date of Purchase", labelLoc = "bottom") %>% 
       dyRangeSelector(dateWindow = c(as.character(input$date - 7), as.character(Sys.time()))) %>% 
       dyLimit(as.numeric(coinz_ts[as.character(input$date)]), color = "red") %>% 
