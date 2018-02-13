@@ -1,4 +1,4 @@
-# script executed everyone by cron on Ubuntu cloud server
+# script executed every hour by cron on Ubuntu cloud server
 
 library(RCrypto)
 library(tidyverse)
